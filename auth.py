@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import LoginManager, UserMixin, login_required, login_user, logout_user, current_user
-from . import db # Import db from the main app
+from database import db # Import db from the main app
 
 auth = Blueprint('auth', __name__)
 
