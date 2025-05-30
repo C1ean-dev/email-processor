@@ -22,9 +22,5 @@ EXPOSE 5000
 # Define environment variable for Flask
 ENV FLASK_APP=app.py
 
-# Initialize the database (optional, can be run manually or via a separate entrypoint script)
-# This step is moved after copying all application code to ensure modules are found.
-RUN flask init-db
-
 # Run the application with Gunicorn
 CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "app:app"]
