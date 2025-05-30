@@ -16,11 +16,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of the application code
 COPY . .
 
-# Expose the port the app runs on
-EXPOSE 5000
+# Expose the port the app runs on (Cloud Run expects 8080 by default)
+EXPOSE 8080
 
 # Define environment variable for Flask
 ENV FLASK_APP=app.py
 
-# Run the application with Gunicorn
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "app:app"]
+# Run the application with Gunicorn, binding to the PORT environment variable provided by Cloud Run
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:${PORT}", "app:app"]
