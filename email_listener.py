@@ -3,9 +3,9 @@ import email
 from email.header import decode_header
 import os
 import re
-from PyPDF2 import PdfReader
 from datetime import datetime, timezone
 import logging
+import pdf_extraction # Import the new pdf_extraction module
 
 logger = logging.getLogger(__name__)
 
@@ -79,110 +79,32 @@ def download_attachments(mail, message_id, download_folder='attachments'):
     logger.warning(f"No PDF attachment found for email ID: {message_id.decode()}")
     return None, None, None
 
-def extract_text_from_pdf(pdf_path):
-    """Extracts text from a PDF file."""
-    logger.info(f"Attempting to extract text from PDF: {pdf_path}")
-    text = ""
-    try:
-        with open(pdf_path, 'rb') as file:
-            reader = PdfReader(file)
-            for page_num in range(len(reader.pages)):
-                page = reader.pages[page_num]
-                text += page.extract_text()
-        logger.info(f"Successfully extracted text from PDF: {pdf_path}")
-    except Exception as e:
-        logger.error(f"Error extracting text from PDF {pdf_path}: {e}")
-    return text
-
-def extract_data_from_text(text):
-    """Extracts specific data points from the given text."""
-    data = {
-        "nome": None,
-        "matricula": None,
-        "funcao": None,
-        "empregador": None,
-        "rg": None,
-        "cpf": None,
-        "equipamentos": [],
-        "data": None
-    }
-
-    # Regex for basic fields
-    patterns = {
-        "nome": r"Empregado:\s*(.*?)\n",
-        "matricula": r"Matrícula:\s*(.*?)\n",
-        "funcao": r"Função:\s*(.*?)\n",
-        "empregador": r"Empregador:\s*(.*?)\n",
-        "rg": r"RG:\s*(.*?)\n",
-        "cpf": r"CPF:\s*(.*?)\n"
-    }
-
-    for key, pattern in patterns.items():
-        match = re.search(pattern, text, re.IGNORECASE)
-        if match:
-            data[key] = match.group(1).strip()
-
-    # Regex for date
-    date_match = re.search(r"São Paulo,\s*(\d{1,2})\s*de\s*([a-zA-ZçÇãõáéíóúàèìòùâêîôûäëïöüñÁÉÍÓÚÀÈÌÒÙÂÊÎÔÛÄËÏÖÜÑ]+)\s*de\s*(\d{4})", text, re.IGNORECASE)
-    if date_match:
-        day = date_match.group(1)
-        month_name = date_match.group(2)
-        year = date_match.group(3)
-        
-        month_mapping = {
-            "janeiro": "01", "fevereiro": "02", "março": "03", "abril": "04", "maio": "05", "junho": "06",
-            "julho": "07", "agosto": "08", "setembro": "09", "outubro": "10", "novembro": "11", "dezembro": "12"
-        }
-        # Handle accented characters in month names
-        month_name_normalized = month_name.lower().replace('ç', 'c').replace('ã', 'a').replace('õ', 'o').replace('á', 'a').replace('é', 'e').replace('í', 'i').replace('ó', 'o').replace('ú', 'u').replace('à', 'a').replace('è', 'e').replace('ì', 'i').replace('ò', 'o').replace('ù', 'u').replace('â', 'a').replace('ê', 'e').replace('î', 'i').replace('ô', 'o').replace('û', 'u').replace('ä', 'a').replace('ë', 'e').replace('ï', 'i').replace('ö', 'o').replace('ü', 'u').replace('ñ', 'n')
-
-        month = month_mapping.get(month_name_normalized, "00") # Default to "00" if not found
-        if month != "00":
-            data["data"] = f"{day}/{month}/{year}"
-        else:
-            logger.warning(f"Could not parse month name: {month_name}")
-
-    # Regex for equipments (can be one or more)
-    # This pattern looks for "Equipamento:", then captures the name, and optionally IMEI or Patrimônio.
-    # It's designed to be flexible for multiple lines and variations.
-    equipment_pattern = re.compile(r"Equipamento:\s*(.*?)(?:\s*IMEI:\s*(\S+))?(?:\s*Patrimônio:\s*(\S+))?", re.IGNORECASE | re.DOTALL)
-    
-    # Find all matches for equipment
-    for match in equipment_pattern.finditer(text):
-        equipment_name = match.group(1).strip()
-        imei = match.group(2) if match.group(2) else None
-        patrimonio = match.group(3) if match.group(3) else None
-        
-        equipment_info = {"nome_equipamento": equipment_name}
-        if imei:
-            equipment_info["imei"] = imei
-        if patrimonio:
-            equipment_info["patrimonio"] = patrimonio
-        data["equipamentos"].append(equipment_info)
-
-    return data
-
 def process_email_and_save(mail, message_id, db, PdfDocument, download_folder='attachments'):
     """Processes a single email: downloads PDF, extracts text, and saves to DB."""
     logger.info(f"Processing email ID: {message_id.decode()}")
     pdf_path, subject, filename = download_attachments(mail, message_id, download_folder)
     if pdf_path and subject and filename:
-        pdf_text = extract_text_from_pdf(pdf_path)
-        extracted_data = extract_data_from_text(pdf_text)
+        raw_pdf_text = pdf_extraction.extract_text_from_pdf(pdf_path)
+        normalized_pdf_text = pdf_extraction.normalize_text(raw_pdf_text)
+        extracted_data = pdf_extraction.extract_data_from_text(normalized_pdf_text)
         
         logger.info(f"Extracted Data: {extracted_data}")
         
-        # Assuming PdfDocument model will be updated to accept these fields
-        # For now, we'll just pass the extracted_text and log the parsed data.
+        # Assuming PdfDocument model is updated to accept these fields
         new_doc = PdfDocument(
             subject=subject,
             filename=filename,
-            extracted_text=pdf_text, # Still saving full text for now
-            processed_at=datetime.now(timezone.utc)
-            # You would add extracted_data fields here if PdfDocument supported them
-            # e.g., nome=extracted_data.get("nome"),
-            # matricula=extracted_data.get("matricula"),
-            # ...
+            pdf_filepath=pdf_path, # Pass the PDF file path
+            extracted_text=raw_pdf_text, # Still saving full raw text
+            processed_at=datetime.now(timezone.utc),
+            nome=extracted_data.get("nome"),
+            matricula=extracted_data.get("matricula"),
+            funcao=extracted_data.get("funcao"),
+            empregador=extracted_data.get("empregador"),
+            rg=extracted_data.get("rg"),
+            cpf=extracted_data.get("cpf"),
+            equipamentos=extracted_data.get("equipamentos"), # This will be a list of dicts
+            data_documento=extracted_data.get("data") # Renamed to avoid conflict with 'data' keyword
         )
         db.session.add(new_doc)
         db.session.commit()
