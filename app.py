@@ -127,6 +127,27 @@ def run_listener_command():
         listen_and_process_emails(EMAIL_ADDRESS, EMAIL_PASSWORD, db, PdfDocument, IMAP_SERVER)
     print("Email listener finished.")
 
+@app.route('/setup', methods=['GET', 'POST'])
+def setup():
+    if User.query.first():
+        flash('Setup already complete. Please login.', 'info')
+        return redirect(url_for('login'))
+
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        if not username or not password:
+            flash('Username and password are required.', 'danger')
+            return render_template('setup.html')
+
+        new_user = User(username=username, password=password) # In a real app, hash this password
+        db.session.add(new_user)
+        db.session.commit()
+        flash('Initial user created successfully. Please login.', 'success')
+        return redirect(url_for('login'))
+
+    return render_template('setup.html')
+
 
 if __name__ == '__main__':
     app.run(debug=True)
