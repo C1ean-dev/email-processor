@@ -1,6 +1,9 @@
+import logging
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import LoginManager, UserMixin, login_required, login_user, logout_user, current_user
 from database import db # Import db from the main app
+
+logger = logging.getLogger(__name__)
 
 auth = Blueprint('auth', __name__)
 
@@ -15,7 +18,9 @@ class User(db.Model, UserMixin):
 
 @auth.route('/login', methods=['GET', 'POST'])
 def login():
+    logger.info('Attempting login')
     if current_user.is_authenticated:
+        logger.info('User already authenticated, redirecting to index')
         return redirect(url_for('index'))
     if request.method == 'POST':
         username = request.form.get('username')
@@ -24,16 +29,20 @@ def login():
         # In a real app, verify hashed password
         if user and user.password == password: # Placeholder for password check
             login_user(user)
+            logger.info(f"User '{username}' logged in successfully")
             flash('Login successful!', 'success')
             return redirect(url_for('index'))
         else:
+            logger.warning(f"Login failed for username '{username}'")
             flash('Login Unsuccessful. Please check username and password', 'danger')
     return render_template('login.html')
 
 @auth.route('/logout')
 @login_required
 def logout():
+    logger.info(f"User '{current_user.username}' attempting to log out")
     logout_user()
+    logger.info('User logged out')
     flash('You have been logged out.', 'info')
     return redirect(url_for('auth.login'))
 

@@ -1,3 +1,4 @@
+import logging
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_login import LoginManager, login_required, current_user, UserMixin
 from datetime import datetime, timezone
@@ -7,19 +8,27 @@ from email_listener import listen_and_process_emails # Import the listener funct
 from database import db # Import db from database.py
 from auth import auth, User # Import the auth blueprint and User model
 
+# Configure basic logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
 # Load environment variables from .env file
 load_dotenv()
 
 app = Flask(__name__)
+logger.info('Flask app created')
+
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'a_very_secret_key')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///site.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app) # Initialize db with the app
+logger.info('Database initialized with app')
 
 login_manager = LoginManager(app)
 login_manager.login_view = 'auth.login'
 login_manager.login_message_category = 'info'
+logger.info('Flask-Login initialized')
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -62,9 +71,10 @@ def search():
 @app.cli.command('init-db')
 def init_db_command():
     """Clear existing data and create new tables."""
+    logger.info('Initializing the database...')
     with app.app_context():
         db.create_all()
-    print('Initialized the database.')
+    logger.info('Database initialized.')
 
 # Command to create a default user (for testing)
 @app.cli.command('create-user')
@@ -75,12 +85,12 @@ def create_user_command():
     with app.app_context():
         existing_user = User.query.filter_by(username=username).first()
         if existing_user:
-            print(f"User '{username}' already exists.")
+            logger.warning(f"User '{username}' already exists.")
         else:
             new_user = User(username=username, password=password) # Store hashed password
             db.session.add(new_user)
             db.session.commit()
-            print(f"User '{username}' created successfully.")
+            logger.info(f"User '{username}' created successfully.")
 
 # Command to run the email listener
 @app.cli.command('run-listener')
@@ -91,18 +101,20 @@ def run_listener_command():
     IMAP_SERVER = os.getenv("IMAP_SERVER", "imap.gmail.com")
 
     if not EMAIL_ADDRESS or not EMAIL_PASSWORD:
-        print("Error: EMAIL_ADDRESS and EMAIL_PASSWORD environment variables must be set.")
+        logger.error("EMAIL_ADDRESS and EMAIL_PASSWORD environment variables must be set.")
         return
 
-    print("Starting email listener...")
+    logger.info("Starting email listener...")
     with app.app_context(): # Ensure app context for database operations
         listen_and_process_emails(EMAIL_ADDRESS, EMAIL_PASSWORD, db, PdfDocument, IMAP_SERVER)
-    print("Email listener finished.")
+    logger.info("Email listener finished.")
 
 @app.route('/setup', methods=['GET', 'POST'])
 def setup():
+    logger.info('Accessing setup route')
     with app.app_context():
         if User.query.first():
+            logger.warning('Setup already complete, redirecting to login.')
             flash('Setup already complete. Please login.', 'info')
             return redirect(url_for('auth.login'))
 
@@ -110,20 +122,26 @@ def setup():
             username = request.form.get('username')
             password = request.form.get('password')
             if not username or not password:
+                logger.warning('Setup attempt failed: Username or password missing.')
                 flash('Username and password are required.', 'danger')
                 return render_template('setup.html')
 
             new_user = User(username=username, password=password) # In a real app, hash this password
             db.session.add(new_user)
             db.session.commit()
+            logger.info(f"Initial user '{username}' created successfully during setup.")
             flash('Initial user created successfully. Please login.', 'success')
             return redirect(url_for('auth.login'))
 
     return render_template('setup.html')
 
 app.register_blueprint(auth) # Register the auth blueprint
+logger.info('Auth blueprint registered')
 
 if __name__ == '__main__':
     with app.app_context():
+        logger.info('Creating database tables if they do not exist...')
         db.create_all() # Create tables if they don't exist
+        logger.info('Database table creation checked.')
+    logger.info('Starting Flask development server...')
     app.run(debug=True)

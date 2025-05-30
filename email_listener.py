@@ -4,16 +4,21 @@ from email.header import decode_header
 import os
 import re
 from PyPDF2 import PdfReader
-from datetime import datetime
+from datetime import datetime, timezone
+import logging
+
+logger = logging.getLogger(__name__)
 
 def connect_to_email(email_address, password, imap_server='imap.gmail.com'):
     """Connects to the IMAP server."""
+    logger.info(f"Attempting to connect to email server: {imap_server}")
     try:
         mail = imaplib.IMAP4_SSL(imap_server)
         mail.login(email_address, password)
+        logger.info("Successfully connected to email server.")
         return mail
     except Exception as e:
-        print(f"Error connecting to email: {e}")
+        logger.error(f"Error connecting to email: {e}")
         return None
 
 def search_emails(mail, folder='INBOX', subject_keywords=None, has_attachment=True):
@@ -35,12 +40,15 @@ def search_emails(mail, folder='INBOX', subject_keywords=None, has_attachment=Tr
     if search_criteria:
         criteria_str = " ".join(search_criteria)
 
+    logger.info(f"Searching emails in folder '{folder}' with criteria: {criteria_str}")
     status, messages = mail.search(None, criteria_str)
     message_ids = messages[0].split()
+    logger.info(f"Found {len(message_ids)} relevant emails.")
     return message_ids
 
 def download_attachments(mail, message_id, download_folder='attachments'):
     """Downloads PDF attachments from an email."""
+    logger.info(f"Attempting to download attachments for email ID: {message_id.decode()}")
     status, msg_data = mail.fetch(message_id, '(RFC822)')
     for response_part in msg_data:
         if isinstance(response_part, tuple):
@@ -66,12 +74,14 @@ def download_attachments(mail, message_id, download_folder='attachments'):
                         os.makedirs(download_folder, exist_ok=True)
                         with open(filepath, 'wb') as f:
                             f.write(part.get_payload(decode=True))
-                        print(f"Downloaded: {filepath}")
+                        logger.info(f"Downloaded PDF: {filepath}")
                         return filepath, subject, decoded_filename # Return subject and filename too
+    logger.warning(f"No PDF attachment found for email ID: {message_id.decode()}")
     return None, None, None
 
 def extract_text_from_pdf(pdf_path):
     """Extracts text from a PDF file."""
+    logger.info(f"Attempting to extract text from PDF: {pdf_path}")
     text = ""
     try:
         with open(pdf_path, 'rb') as file:
@@ -79,12 +89,14 @@ def extract_text_from_pdf(pdf_path):
             for page_num in range(len(reader.pages)):
                 page = reader.pages[page_num]
                 text += page.extract_text()
+        logger.info(f"Successfully extracted text from PDF: {pdf_path}")
     except Exception as e:
-        print(f"Error extracting text from PDF {pdf_path}: {e}")
+        logger.error(f"Error extracting text from PDF {pdf_path}: {e}")
     return text
 
 def process_email_and_save(mail, message_id, db, PdfDocument, download_folder='attachments'):
     """Processes a single email: downloads PDF, extracts text, and saves to DB."""
+    logger.info(f"Processing email ID: {message_id.decode()}")
     pdf_path, subject, filename = download_attachments(mail, message_id, download_folder)
     if pdf_path and subject and filename:
         pdf_text = extract_text_from_pdf(pdf_path)
@@ -96,44 +108,50 @@ def process_email_and_save(mail, message_id, db, PdfDocument, download_folder='a
             subject=subject,
             filename=filename,
             extracted_text=pdf_text,
-            processed_at=datetime.utcnow()
+            processed_at=datetime.now(timezone.utc)
         )
         db.session.add(new_doc)
         db.session.commit()
-        print(f"Saved document '{filename}' with subject '{subject}' to database.")
+        logger.info(f"Saved document '{filename}' with subject '{subject}' to database.")
         os.remove(pdf_path) # Clean up downloaded PDF
+        logger.info(f"Cleaned up downloaded PDF: {pdf_path}")
         return True
+    logger.warning(f"Could not process email ID {message_id.decode()} due to missing PDF or metadata.")
     return False
 
 def listen_and_process_emails(email_address, password, db, PdfDocument, imap_server='imap.gmail.com',
                                subject_keywords=["termo de recebimento", "termo de devolução"],
                                download_folder='attachments'):
     """Connects, listens, and processes relevant emails."""
+    logger.info("Starting email listener...")
     mail = connect_to_email(email_address, password, imap_server)
     if not mail:
+        logger.error("Failed to connect to email server, listener stopping.")
         return
 
-    print("Listening for emails...")
     try:
         message_ids = search_emails(mail, subject_keywords=subject_keywords, has_attachment=True)
         if message_ids:
-            print(f"Found {len(message_ids)} relevant emails.")
+            logger.info(f"Found {len(message_ids)} relevant emails.")
             for msg_id in message_ids:
-                print(f"Processing email ID: {msg_id.decode()}")
                 success = process_email_and_save(mail, msg_id, db, PdfDocument, download_folder)
                 if success:
-                    print(f"Successfully processed and saved email ID {msg_id.decode()}.")
+                    logger.info(f"Successfully processed and saved email ID {msg_id.decode()}.")
                     # Mark email as seen to avoid reprocessing
                     mail.store(msg_id, '+FLAGS', '\\Seen')
+                    logger.info(f"Marked email ID {msg_id.decode()} as seen.")
                 else:
-                    print(f"Could not process email ID {msg_id.decode()}.")
+                    logger.warning(f"Could not process email ID {msg_id.decode()}.")
         else:
-            print("No new relevant emails found.")
+            logger.info("No new relevant emails found.")
     except Exception as e:
-        print(f"An error occurred during email processing: {e}")
+        logger.error(f"An error occurred during email processing: {e}")
     finally:
-        mail.logout()
-        mail.close()
+        if mail:
+            mail.logout()
+            mail.close()
+            logger.info("Email connection closed.")
+        logger.info("Email listener finished.")
 
 if __name__ == '__main__':
     # This block is for testing email_listener.py independently.
@@ -167,4 +185,6 @@ if __name__ == '__main__':
         print("Please set EMAIL_ADDRESS and EMAIL_PASSWORD environment variables in a .env file.")
     else:
         print("Running email listener in standalone mock mode. No data will be saved to a real database.")
+        # Configure logging for standalone mode
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         listen_and_process_emails(EMAIL_ADDRESS, EMAIL_PASSWORD, MockDb(), MockPdfDocument, IMAP_SERVER)
