@@ -35,7 +35,7 @@ def login():
 def logout():
     logout_user()
     flash('You have been logged out.', 'info')
-    return redirect(url_for('login'))
+    return redirect(url_for('auth.login'))
 
 # This will be handled in app.py's login_manager
 # @login_manager.user_loader
