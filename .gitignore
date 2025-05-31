@@ -1,25 +1,36 @@
-# Byte-code files
+# Python
+__pycache__/
 *.pyc
 *.pyo
-__pycache__/
-
-# Environment files
-.env
+*.pyd
+.Python
+env/
 venv/
 .venv/
+*.egg-info/
+.tox/
+.mypy_cache/
+.pytest_cache/
+.ipynb_checkpoints/
 
-# Database files
+# Flask
+instance/
+.flaskenv
+
+# Environment variables
+.env
+.flaskenv
+
+# Database
 *.db
-*.sqlite
 *.sqlite3
 
-# Downloaded attachments
+# Uploads/Downloads
 attachments/
 
-# IDE specific files
+# IDEs
 .vscode/
+.idea/
 
-# OS generated files
-.DS_Store
-Thumbs.db
-
+# Fly.io
+.fly/
