@@ -145,7 +145,6 @@ def listen_and_process_emails(email_address, password, db, PdfDocument, imap_ser
     finally:
         if mail:
             mail.logout()
-            mail.close()
             logger.info("Email connection closed.")
         logger.info("Email listener finished.")
 
