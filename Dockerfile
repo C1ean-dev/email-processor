@@ -23,4 +23,4 @@ EXPOSE 8080
 ENV FLASK_APP=app.py
 
 # Run the application with Gunicorn, binding to the PORT environment variable provided by Cloud Run
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:${PORT}", "app:app"]
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8080", "app:app"]
