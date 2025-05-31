@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import os
 from dotenv import load_dotenv
 from email_listener import listen_and_process_emails # Import the listener function
-from database import db # Import db from database.py
+from database import PdfDocument, db # Import db from database.py
 from auth import auth, User # Import the auth blueprint and User model
 
 # Configure basic logging
@@ -33,18 +33,6 @@ logger.info('Flask-Login initialized')
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
-
-# Database Models
-class PdfDocument(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    subject = db.Column(db.String(255), nullable=False)
-    filename = db.Column(db.String(255), nullable=False)
-    extracted_text = db.Column(db.Text, nullable=False)
-    processed_at = db.Column(db.DateTime, nullable=False, default=datetime.now(timezone.utc))
-    # Add more fields here as per the specific data to be extracted from PDFs
-
-    def __repr__(self):
-        return f"PdfDocument('{self.filename}', '{self.subject}')"
 
 @app.route('/')
 @login_required
