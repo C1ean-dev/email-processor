@@ -1,0 +1,25 @@
+# Byte-code files
+*.pyc
+*.pyo
+__pycache__/
+
+# Environment files
+.env
+venv/
+.venv/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Downloaded attachments
+attachments/
+
+# IDE specific files
+.vscode/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
