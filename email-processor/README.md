@@ -81,6 +81,8 @@ This project is a Flask web application that listens for emails with specific su
 
 ## Running with Docker
 
+To build and run the Docker image, navigate to the root of the repository (`c:/projetos/email-processor`) in your terminal.
+
 1.  **Build the Docker image:**
 
     ```bash
